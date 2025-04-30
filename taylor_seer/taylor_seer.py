@@ -2,7 +2,7 @@ import torch
 import functools
 import math
 
-def taylor_seer(warmup_steps=1, skip_interval_steps=1, compute_step_map=None, n_derivatives = 2):
+def taylor_seer(n_derivatives = 2):
     """
     A decorator that approximates the forward pass of an nn.Module to reduce computation.
     
@@ -32,10 +32,6 @@ def taylor_seer(warmup_steps=1, skip_interval_steps=1, compute_step_map=None, n_
         A decorator function that can be applied to an nn.Module
     """
     
-    # make sure the warmup and skip interval are at least 1
-    warmup_steps = max(int(warmup_steps), 1)
-    skip_interval_steps = max(int(skip_interval_steps), 1)
-    
     # 'order' of the taylor approximation is the value itself, plus however many
     # derivatives we are approximating
     ORDER = n_derivatives + 1
@@ -49,23 +45,26 @@ def taylor_seer(warmup_steps=1, skip_interval_steps=1, compute_step_map=None, n_
             original_init(self, *args, **kwargs)
             self.reset_cache()
     
-        def reset_cache(self):
+        def reset_cache(self, warmup_steps=1, skip_interval_steps=1, compute_step_map=None):
             """Reset the cache state between predictions."""
             self.state = {
                 'dY_prev': [None] * ORDER,
                 'dY_current': [None] * ORDER,
             }
+            self.warmup_steps = warmup_steps
+            self.skip_interval_steps = skip_interval_steps
+            self.compute_step_map = compute_step_map
             self.current_step = -1
             self.last_non_approximated_step = -1
     
-        def _should_compute_full(step):
-            if compute_step_map is not None:
-                return compute_step_map[step]
+        def _should_compute_full(self, step):
+            if self.compute_step_map is not None:
+                return self.compute_step_map[step]
             else:
                 # we compute the actual forward pass for the first warmup steps
                 # and then we compute the forward pass every skip_interval after that
-                if (step < warmup_steps or 
-                    (step >= warmup_steps and (step - warmup_steps + 1) % skip_interval_steps == 0)):
+                if (step < self.warmup_steps or 
+                    (step >= self.warmup_steps and (step - self.warmup_steps + 1) % self.skip_interval_steps == 0)):
                     return True
                 else:
                     return False
@@ -115,7 +114,7 @@ def taylor_seer(warmup_steps=1, skip_interval_steps=1, compute_step_map=None, n_
         def new_forward(self, *args, **kwargs):
             self.current_step += 1
             
-            if _should_compute_full(self.current_step):
+            if self._should_compute_full(self.current_step):
 
                 # compute actual forward pass
                 Y = original_forward(self, *args, **kwargs)
@@ -140,6 +139,7 @@ def taylor_seer(warmup_steps=1, skip_interval_steps=1, compute_step_map=None, n_
         cls.__init__ = new_init
         cls.forward = new_forward
         cls.reset_cache = reset_cache
+        cls._should_compute_full = _should_compute_full
         return cls
     
     return decorator

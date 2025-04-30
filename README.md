@@ -30,6 +30,7 @@ class timestep_squared(nn.Module):
         return timestep**2
 
 model = timestep_squared()
+model.reset_cache(warmup_steps=4, skip_interval_steps=2)
 
 for i in range(10):
     timestep = torch.tensor(i, dtype=torch.float32)
@@ -49,7 +50,7 @@ for i in range(10):
 
 ```
 ## Explanation
-The code above uses the `@taylor_seer` decorator to wrap the `timestep_squared` class, this class is computing the square of whatever input it recieves. The decorator arguments `warmup_steps=4`, `skip_interval_steps=2`, tell the decorator to compute the full output of the model for the first 4 timesteps, and then for all remaining timesteps alternate between returning the taylor series approximation, and computing the full output of the model. The `n_derivatives=1` argument tells the model to only keep track of the first derivative. Notice how the approximation slightly underestimates the $f(t)=t^2$ curve. This is because when we approximate the value at timestep $t$ we are using a taylor series expansion that is centered around the value at a previous timestep. This means we are always slightly underestimating the value at timestep $t$, since $f'(t)=2t$ increases with $t$. But actively predicting the value of the model is still much better than just reusing the output from the previous timestep. (illustrated below)
+The code above uses the `@taylor_seer` decorator to wrap the `timestep_squared` class, this class is computing the square of whatever input it recieves. The arguments `warmup_steps=4`, `skip_interval_steps=2`, tell the decorator to compute the full output of the model for the first 4 timesteps, and then for all remaining timesteps alternate between returning the taylor series approximation, and computing the full output of the model. The `n_derivatives=1` argument tells the model to only keep track of the first derivative. Notice how the approximation slightly underestimates the $f(t)=t^2$ curve. This is because when we approximate the value at timestep $t$ we are using a taylor series expansion that is centered around the value at a previous timestep. This means we are always slightly underestimating the value at timestep $t$, since $f'(t)=2t$ increases with $t$. But actively predicting the value of the model is still much better than just reusing the output from the previous timestep. (illustrated below)
 
 ![Taylor Seer Illustration](./taylor_seer_annotated.png)
 
